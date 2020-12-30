@@ -1,5 +1,5 @@
 {
-    "name": "akrabat/proxy-detection-middleware",
+    "name": "semhoun/proxy-detection-middleware",
     "description": "PSR-7 Middleware that determines the scheme, host and port from the 'X-Forwarded-Proto', 'X-Forwarded-Host' and 'X-Forwarded-Port' headers and updates the Request's Uri object.",
     "keywords": [
         "psr7", "middleware", "ip"
