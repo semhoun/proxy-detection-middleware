@@ -9,32 +9,43 @@ You can set a list of proxies that are trusted as the second constructor paramet
 
 ## Installation
 
-`composer require akrabat/proxy-detection-middleware`
+`composer require semhoun/proxy-detection-middleware`
 
 
 ## Usage
 
-In Slim 3:
+In Slim 4:
 
 ```php
-$trustedProxies = ['10.0.0.1', '10.0.0.2'];
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Psr\Http\Server\RequestHandlerInterface as RequestHandler;
+use Slim\Factory\AppFactory;
+use Slim\Psr7\Response;
+
+require __DIR__ . '/../vendor/autoload.php';
+
+$app = AppFactory::create();
+
+$trustedProxies = ['10.0.0.1', '10.0.0.2', '192.168.0.0/24'];
 $app->add(new RKA\Middleware\ProxyDetection($trustedProxies));
 
-$app->get('/', function ($request, $response, $args) {
+$app->get('/', function (Request $request, Response $response, $args) {
     $scheme = $request->getUri()->getScheme();
     $host = $request->getUri()->getHost();
     $port = $request->getUri()->getPort();
 
+    $response->getBody()->write('Real URI is ' . $scheme . '://' . $host . ':' . $port);
     return $response;
 });
+
+$app->run();
 ```
 
 ## Testing
 
 * Code coverage: ``$ vendor/bin/phpcs``
 * Unit tests: ``$ vendor/bin/phpunit``
-* Code coverage: ``$ vendor/bin/phpunit --coverage-html ./build``
 
 
-[Master]: https://travis-ci.org/akrabat/rka-content-type-renderer
-[Master image]: https://secure.travis-ci.org/akrabat/rka-content-type-renderer.svg?branch=master
+[Master]: https://travis-ci.org/semhoun/rka-content-type-renderer
+[Master image]: https://secure.travis-ci.org/semhoun/rka-content-type-renderer.svg?branch=master

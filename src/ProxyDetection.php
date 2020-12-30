@@ -3,9 +3,11 @@ namespace RKA\Middleware;
 
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Server\MiddlewareInterface;
+use Psr\Http\Server\RequestHandlerInterface;
 use Psr\Http\Message\UriInterface;
 
-class ProxyDetection
+class ProxyDetection implements MiddlewareInterface
 {
     /**
      * List of trusted proxy IP addresses
@@ -30,28 +32,60 @@ class ProxyDetection
     /**
      * Override the request URI's scheme, host and port as determined from the proxy headers
      *
-     * @param ServerRequestInterface $request PSR7 request
-     * @param ResponseInterface $response     PSR7 response
-     * @param callable $next                  Next middleware
+     * @param  ServerRequestInterface  $request PSR-7 request
+     * @param  RequestHandlerInterface $handler PSR-15 request handler
      *
      * @return ResponseInterface
      */
-    public function __invoke(ServerRequestInterface $request, ResponseInterface $response, $next)
+    public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
-        if (!$next) {
-            return $response;
-        }
-        
         if (!empty($this->trustedProxies)) {
             // get IP address from REMOTE_ADDR
             $ipAddress = null;
             $serverParams = $request->getServerParams();
             if (isset($serverParams['REMOTE_ADDR']) && $this->isValidIpAddress($serverParams['REMOTE_ADDR'])) {
                 $ipAddress = $serverParams['REMOTE_ADDR'];
+            } else {
+                return $handler->handle($request);
             }
 
-            if (!in_array($ipAddress, $this->trustedProxies)) {
-                return $response = $next($request, $response);
+            $allow = false;
+
+            foreach ($this->trustedProxies as $proxy) {
+                // If IP has / means CIDR notation
+                if (strpos($proxy, '/') === false) {
+                    // Check Single IP
+                    if (inet_pton($ipAddress) == inet_pton($proxy)) {
+                        $allow = true;
+                        break;
+                    }
+                } else {
+                    // Check IP range
+                    list($subnet, $bits) = explode('/', $proxy);
+
+                    // Convert subnet to binary string of $bits length
+                    $subnet = unpack('H*', inet_pton($subnet)); // Subnet in Hex
+                    foreach ($subnet as $i => $h) {
+                        $subnet[$i] = base_convert($h, 16, 2); // Array of Binary
+                    }
+                    $subnet = substr(implode('', $subnet), 0, $bits); // Subnet in Binary, only network bits
+
+                    // Convert remote IP to binary string of $bits length
+                    $ip = unpack('H*', inet_pton($ipAddress)); // IP in Hex
+                    foreach ($ip as $i => $h) {
+                        $ip[$i] = base_convert($h, 16, 2); // Array of Binary
+                    }
+                    $ip = substr(implode('', $ip), 0, $bits); // IP in Binary, only network bits
+
+                    // Check network bits match
+                    if ($subnet == $ip) {
+                        $allow = true;
+                        break;
+                    }
+                }
+            }
+            if (!$allow) {
+                return $handler->handle($request);
             }
         }
 
@@ -63,7 +97,7 @@ class ProxyDetection
 
         $request = $request->withUri($uri);
 
-        return $response = $next($request, $response);
+        return $handler->handle($request);
     }
 
     /**
